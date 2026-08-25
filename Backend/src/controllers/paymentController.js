@@ -89,3 +89,30 @@ exports.verifyPayment = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Verification failed' });
   }
 };
+
+// Step 3: Handle Razorpay webhook events (backup safety net)
+exports.handleWebhook = async (req, res) => {
+  try {
+    const event = req.body.event;
+    const payload = req.body.payload.payment.entity;
+
+    if (event === 'payment.captured') {
+      await Order.findOneAndUpdate(
+        { razorpayOrderId: payload.order_id },
+        { status: 'paid', razorpayPaymentId: payload.id }
+      );
+    }
+
+    if (event === 'payment.failed') {
+      await Order.findOneAndUpdate(
+        { razorpayOrderId: payload.order_id },
+        { status: 'failed' }
+      );
+    }
+
+    return res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook error:', err);
+    return res.status(500).json({ received: false });
+  }
+};
